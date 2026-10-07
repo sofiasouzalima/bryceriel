@@ -36,7 +36,10 @@ button{cursor:pointer;font-family:'Raleway',sans-serif}
 nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;background:rgba(7,8,14,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);gap:1.5rem}
 .nav-logo{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:300;letter-spacing:1px;color:#fff;white-space:nowrap;flex-shrink:0}
 .nav-logo span{color:var(--pastel-cobalt);font-style:italic}
-.nav-links{display:flex;gap:1.5rem;list-style:none;flex-wrap:nowrap;flex:1;justify-content:center;margin:0 1rem}
+.nav-links{display:flex;gap:1.5rem;list-style:none;flex-wrap:nowrap;flex:1;justify-content:center;margin:0 1rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-bonus-short{display:none}
+@media(max-width:680px){.nav-bonus-full{display:none}.nav-bonus-short{display:inline}}
 .nav-links a{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--cream);transition:color .2s;white-space:nowrap;text-decoration:none;padding:4px 0}
 .nav-links a:hover{color:var(--pastel-cobalt)}
 .nav-right{display:flex;align-items:center;gap:.75rem;flex-shrink:0}
@@ -161,12 +164,16 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;ali
 
 /* Very small phones — 380px */
 @media (max-width:380px){
-  .nav-links{gap:.4rem}
-  .nav-links a{font-size:7px;letter-spacing:.8px}
+  .nav-links{gap:.3rem}
+  .nav-links a{font-size:6.5px;letter-spacing:.6px}
   .nav-logo{font-size:14px}
   .hero-title{font-size:clamp(36px,12vw,60px)}
   .lc-card{padding:1.25rem 1rem}
   .fanart-grid{grid-template-columns:1fr}
+  #view-bonus{padding:70px .4rem 2rem}
+  .bc-book-header{padding:.65rem .6rem}
+  .bc-chapter-header{padding:.6rem .6rem}
+  .bc-chapter-text{font-size:12px;padding:.75rem .6rem;max-height:240px}
 }
 
 /* Touch devices — bigger tap targets */
@@ -748,10 +755,32 @@ footer{border-top:1px solid var(--border);text-align:center;padding:3.5rem 2rem;
 .bc-chapter-text::-webkit-scrollbar-thumb{background:rgba(212,160,48,.3);border-radius:2px}
 .bc-chapter-text p{margin-bottom:1rem}
 .bc-chapter-text p:last-child{margin-bottom:0}
-@media(max-width:600px){
-  #view-bonus{padding:90px 1rem 3rem}
-  .bc-book-name{font-size:16px}
-  .bc-chapter-text{max-height:320px;font-size:13px}
+@media(max-width:768px){
+  #view-bonus{padding:80px 1rem 3rem}
+  .bc-book-name{font-size:17px}
+  .bc-book-header{padding:.85rem 1rem;gap:.6rem}
+  .bc-book-abbrev{font-size:8px;letter-spacing:2px;padding:2px 6px}
+  .bc-book-count{font-size:10px}
+  .bc-chapter-header{padding:.7rem .85rem;gap:.5rem}
+  .bc-chapter-chars{font-size:15px}
+  .bc-chapter-text{max-height:300px;font-size:13px;padding:1rem}
+  .bc-star-badge{font-size:8px;letter-spacing:1.5px;padding:2px 5px}
+}
+@media(max-width:480px){
+  #view-bonus{padding:74px .6rem 2.5rem}
+  .bc-book-section{border-radius:0}
+  .bc-book-header{padding:.75rem .75rem;gap:.5rem;flex-wrap:wrap}
+  .bc-book-abbrev{font-size:8px;letter-spacing:1.5px;padding:2px 5px}
+  .bc-book-name{font-size:15px;line-height:1.2}
+  .bc-book-count{font-size:9px;width:100%;padding-left:0;text-align:left}
+  .bc-chapters-list{padding:.3rem}
+  .bc-chapter-card{margin:.3rem 0}
+  .bc-chapter-header{padding:.65rem .75rem;gap:.4rem;flex-wrap:wrap}
+  .bc-chapter-title-row{gap:.4rem;min-width:0}
+  .bc-chapter-chars{font-size:14px;word-break:break-word;line-height:1.25}
+  .bc-chapter-text{max-height:260px;font-size:12.5px;line-height:1.75;padding:.85rem .75rem}
+  .bc-star-badge{font-size:7.5px;letter-spacing:1px;padding:2px 4px}
+  .bc-chevron,.bc-chevron-sm{flex-shrink:0}
 }
 
 </style>
@@ -839,7 +868,7 @@ window.__BRYCERIEL_POSTS__ = [{"id":"1wivnyt","title":"“Mark my words…”","
       <li><a href="#" onclick="event.preventDefault();navTo('archive')">Archive</a></li>
       <li><a href="#" onclick="event.preventDefault();navTo('fanart')">Fanart</a></li>
       <li><a href="#" onclick="event.preventDefault();navTo('community')">Community</a></li>
-      <li><a href="#" onclick="event.preventDefault();navTo('bonus')">Bonus Chapters</a></li>
+      <li><a href="#" onclick="event.preventDefault();navTo('bonus')" class="nav-bonus-link"><span class="nav-bonus-full">Bonus Chapters</span><span class="nav-bonus-short">Bonus</span></a></li>
     </ul>
   <div class="nav-right">
     <button class="nav-level-badge" onclick="openLevelChooser()" id="navLevelBadge">Brycurious</button>
