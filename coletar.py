@@ -24,12 +24,15 @@ from datetime import datetime
 # ─── CONFIGURAÇÃO ────────────────────────────────────────────
 SUBREDDIT = "Bryceriel"
 DATA_FILE = "data/posts.json"
-ANTHROPIC_KEY = "SUA_CHAVE_AQUI"  # <- coloca sua chave da API Anthropic
+ANTHROPIC_KEY = "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"  # <- coloca sua chave da API Anthropic
 MAX_COMMENTS_PER_POST = 20         # top comentários por upvote
 MIN_COMMENT_UPVOTES = 3            # ignora comentários com menos disso
+MAX_POSTS_TO_PROCESS_AI = None     # 🛡️ LIMITE DE SEGURANÇA (None = todos, 5 = teste)
 AI_CONFIDENCE_THRESHOLD = 0.70     # abaixo disso vai para revisão manual
 SKIP_TAGS = ["toxic thursday", "toxicthursday"]  # tags para ignorar
 BASE_URL = "https://arctic-shift.photon-reddit.com/api"
+USER_AGENT = "BrycerielArchive/1.0 (fan archive script)"
+HEADERS = {"User-Agent": USER_AGENT}
 
 # Tags que indicam possível portfolio/fanart
 PORTFOLIO_TAGS = [
@@ -54,29 +57,39 @@ else:
 # ─── COLETAR POSTS ────────────────────────────────────────────
 print(f"\nColetando posts de r/{SUBREDDIT}...")
 new_posts_raw = []
-after = None
+after_utc = None  # paginação por timestamp (mais antigo primeiro)
 stopped = False
+loop_count = 0
 
 while not stopped:
-    url = f"{BASE_URL}/posts?subreddit={SUBREDDIT}&limit=100&sort=new"
-    if after:
-        url += f"&after={after}"
+    loop_count += 1
+    url = f"{BASE_URL}/posts/search?subreddit={SUBREDDIT}&limit=100&sort=desc&sort_type=created_utc"
+    if after_utc:
+        url += f"&before={after_utc}"
 
     try:
-        resp = requests.get(url, timeout=30)
-        data = resp.json().get("data", [])
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        if resp.status_code != 200:
+            print(f"  HTTP {resp.status_code}: {resp.text[:200]}")
+            break
+        try:
+            json_data = resp.json()
+        except Exception as je:
+            print(f"  Resposta não-JSON da API. Conteúdo: {resp.text[:200]}")
+            break
+        data = json_data.get("data", [])
     except Exception as e:
         print(f"  Erro ao coletar posts: {e}")
         break
 
     if not data:
+        print(f"  Sem mais posts. Total coletado: {len(new_posts_raw)}")
         break
 
     for post in data:
         if post["id"] in existing_ids:
-            print(f"  Post já existente encontrado. Parando coleta.")
-            stopped = True
-            break
+            # 💾 Já processado em execução anterior — pula (modo retomada)
+            continue
 
         # Pula tags bloqueadas
         flair = (post.get("link_flair_text") or "").lower()
@@ -87,9 +100,21 @@ while not stopped:
         new_posts_raw.append(post)
 
     if data:
-        after = data[-1]["id"]
-    print(f"  {len(new_posts_raw)} posts novos encontrados...")
+        # Paginação: pega o timestamp do último post pra próxima página
+        after_utc = data[-1].get("created_utc")
+        if not after_utc:
+            break
+    skipped = len(data) - len([p for p in data if p["id"] not in existing_ids])
+    if skipped:
+        print(f"  {len(new_posts_raw)} posts novos encontrados (página {loop_count}, pulados {skipped} já processados)...")
+    else:
+        print(f"  {len(new_posts_raw)} posts novos encontrados (página {loop_count})...")
     time.sleep(0.5)
+
+    # safety limit (cada página tem 100 posts, 50 páginas = 5000 posts)
+    if loop_count > 50:
+        print("  Limite de páginas atingido (50). Parando.")
+        break
 
 print(f"\nTotal de posts novos para processar: {len(new_posts_raw)}")
 
@@ -97,8 +122,10 @@ print(f"\nTotal de posts novos para processar: {len(new_posts_raw)}")
 def get_comments(post_id, post_author):
     """Coleta top comentários de um post."""
     try:
-        url = f"{BASE_URL}/comments?link_id={post_id}&limit=100&sort=top"
-        resp = requests.get(url, timeout=30)
+        url = f"{BASE_URL}/comments/search?link_id={post_id}&limit=100"
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        if resp.status_code != 200:
+            return []
         comments_raw = resp.json().get("data", [])
 
         comments = []
@@ -191,14 +218,25 @@ Be strict. "brycurious" is only for genuinely introductory content."""
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-5",
                 "max_tokens": 1000,
                 "messages": [{"role": "user", "content": prompt}]
             },
             timeout=30
         )
 
-        text = resp.json()["content"][0]["text"].strip()
+        if resp.status_code != 200:
+            error_data = resp.json() if resp.text else {}
+            error_msg = error_data.get("error", {}).get("message", resp.text[:200])
+            print(f"    Erro HTTP {resp.status_code} da API Anthropic: {error_msg}")
+            return basic_categorize(post, comments)
+
+        response_data = resp.json()
+        if "content" not in response_data:
+            print(f"    Resposta inesperada da API: {str(response_data)[:200]}")
+            return basic_categorize(post, comments)
+
+        text = response_data["content"][0]["text"].strip()
         # Remove markdown code blocks if present
         text = text.replace("```json", "").replace("```", "").strip()
         result = json.loads(text)
@@ -210,7 +248,7 @@ Be strict. "brycurious" is only for genuinely introductory content."""
         return result
 
     except Exception as e:
-        print(f"    Erro na IA: {e}. Usando categorização básica.")
+        print(f"    Erro na IA: {type(e).__name__}: {e}. Usando categorização básica.")
         return basic_categorize(post, comments)
 
 
@@ -270,72 +308,111 @@ def basic_categorize(post, comments):
 
 # ─── PROCESSAR POSTS NOVOS ────────────────────────────────────
 processed = []
+SAVE_EVERY = 10  # 💾 salva o progresso a cada N posts
 
-for i, post in enumerate(new_posts_raw):
-    print(f"\nProcessando {i+1}/{len(new_posts_raw)}: {post.get('title','')[:60]}...")
+def save_progress(processed_list, existing_list):
+    """Salva o progresso atual no posts.json (auto-save)."""
+    combined = processed_list + existing_list
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(combined, f, ensure_ascii=False, indent=2)
 
-    # Coleta comentários
-    print(f"  Coletando comentários...")
-    comments = get_comments(post["id"], post.get("author", ""))
-    print(f"  {len(comments)} comentários relevantes encontrados.")
+# 🛡️ LIMITE DE SEGURANÇA: aplica MAX_POSTS_TO_PROCESS_AI
+posts_to_process = new_posts_raw[:MAX_POSTS_TO_PROCESS_AI] if MAX_POSTS_TO_PROCESS_AI else new_posts_raw
 
-    # Categoriza com IA
-    print(f"  Categorizando com IA...")
-    ai_data = categorize_with_ai(post, comments)
+if MAX_POSTS_TO_PROCESS_AI and len(new_posts_raw) > MAX_POSTS_TO_PROCESS_AI:
+    print(f"\n⚠️  LIMITE DE SEGURANÇA ATIVADO: processando só os primeiros {MAX_POSTS_TO_PROCESS_AI} de {len(new_posts_raw)} posts.")
+    print(f"   (Para processar todos, mude MAX_POSTS_TO_PROCESS_AI = None na linha 30)\n")
 
-    # Detecta se tem imagem
-    url = post.get("url", "")
-    has_image = url.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
-    image_url = url if has_image else None
+print(f"\n💾 Auto-save ativado: progresso será salvo a cada {SAVE_EVERY} posts.\n")
+print(f"💡 Pode pausar com Ctrl+C — o progresso ficará salvo. Rodar de novo retoma de onde parou.\n")
 
-    # Monta o objeto final
-    processed_post = {
-        # Dados originais do Reddit
-        "id": post["id"],
-        "title": post.get("title", ""),
-        "body": post.get("selftext", ""),
-        "author": post.get("author", ""),
-        "upvotes": post.get("score", 0),
-        "comments_count": post.get("num_comments", 0),
-        "date": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y-%m-%d"),
-        "year": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y"),
-        "month": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y-%m"),
-        "reddit_url": f"https://reddit.com{post.get('permalink', '')}",
-        "reddit_tag": post.get("link_flair_text", ""),
-        "has_image": has_image,
-        "image_url": image_url,
+try:
+    for i, post in enumerate(posts_to_process):
+        print(f"\nProcessando {i+1}/{len(posts_to_process)}: {post.get('title','')[:60]}...")
 
-        # Dados dos comentários
-        "top_comments": comments,
+        # Coleta comentários
+        print(f"  Coletando comentários...")
+        comments = get_comments(post["id"], post.get("author", ""))
+        print(f"  {len(comments)} comentários relevantes encontrados.")
 
-        # Dados da IA
-        "ai_category": ai_data.get("ai_category", "discussion"),
-        "ai_level": ai_data.get("ai_level", "student"),
-        "ai_tags": ai_data.get("ai_tags", []),
-        "ai_is_parallel": ai_data.get("ai_is_parallel", False),
-        "ai_is_receipt": ai_data.get("ai_is_receipt", False),
-        "ai_portfolio_candidate": ai_data.get("ai_portfolio_candidate", False),
-        "ai_confidence": ai_data.get("ai_confidence", 0.6),
-        "ai_summary": ai_data.get("ai_summary", ""),
-        "ai_key_points": ai_data.get("ai_key_points", []),
-        "ai_related_themes": ai_data.get("ai_related_themes", []),
-        "needs_review": ai_data.get("needs_review", True),
+        # Categoriza com IA
+        print(f"  Categorizando com IA...")
+        ai_data = categorize_with_ai(post, comments)
 
-        # Status no site (editável pelo admin)
-        "approved": not ai_data.get("needs_review", True),
-        "portfolio_approved": False,  # portfolio sempre precisa aprovação manual
-        "manually_edited": False,
-        "hidden": False,
+        # Detecta se tem imagem
+        url = post.get("url", "")
+        has_image = url.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
+        image_url = url if has_image else None
 
-        # Sugestões de posts relacionados (preenchido depois)
-        "related_post_ids": [],
+        # Monta o objeto final
+        processed_post = {
+            # Dados originais do Reddit
+            "id": post["id"],
+            "title": post.get("title", ""),
+            "body": post.get("selftext", ""),
+            "author": post.get("author", ""),
+            "upvotes": post.get("score", 0),
+            "comments_count": post.get("num_comments", 0),
+            "date": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y-%m-%d"),
+            "year": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y"),
+            "month": datetime.fromtimestamp(post.get("created_utc", 0)).strftime("%Y-%m"),
+            "reddit_url": f"https://reddit.com{post.get('permalink', '')}",
+            "reddit_tag": post.get("link_flair_text", ""),
+            "has_image": has_image,
+            "image_url": image_url,
 
-        # Canon updates (preenchido após releases de novos livros)
-        "canon_updates": []
-    }
+            # Dados dos comentários
+            "top_comments": comments,
 
-    processed.append(processed_post)
-    time.sleep(0.3)  # evita rate limiting
+            # Dados da IA
+            "ai_category": ai_data.get("ai_category", "discussion"),
+            "ai_level": ai_data.get("ai_level", "student"),
+            "ai_tags": ai_data.get("ai_tags", []),
+            "ai_is_parallel": ai_data.get("ai_is_parallel", False),
+            "ai_is_receipt": ai_data.get("ai_is_receipt", False),
+            "ai_portfolio_candidate": ai_data.get("ai_portfolio_candidate", False),
+            "ai_confidence": ai_data.get("ai_confidence", 0.6),
+            "ai_summary": ai_data.get("ai_summary", ""),
+            "ai_key_points": ai_data.get("ai_key_points", []),
+            "ai_related_themes": ai_data.get("ai_related_themes", []),
+            "needs_review": ai_data.get("needs_review", True),
+
+            # Status no site (editável pelo admin)
+            "approved": not ai_data.get("needs_review", True),
+            "portfolio_approved": False,
+            "manually_edited": False,
+            "hidden": False,
+
+            # Sugestões de posts relacionados (preenchido depois)
+            "related_post_ids": [],
+
+            # Canon updates (preenchido após releases de novos livros)
+            "canon_updates": []
+        }
+
+        processed.append(processed_post)
+
+        # 💾 AUTO-SAVE a cada SAVE_EVERY posts
+        if (i + 1) % SAVE_EVERY == 0:
+            save_progress(processed, existing)
+            print(f"  💾 Auto-save: {len(processed)} posts salvos no arquivo.")
+
+        time.sleep(0.3)  # evita rate limiting
+
+except KeyboardInterrupt:
+    print(f"\n\n⏸️  Interrompido pelo usuário (Ctrl+C).")
+    print(f"💾 Salvando progresso: {len(processed)} posts processados...")
+    save_progress(processed, existing)
+    print(f"✅ Progresso salvo. Rode 'python coletar.py' novamente para retomar de onde parou.")
+    import sys
+    sys.exit(0)
+except Exception as e:
+    print(f"\n\n❌ Erro inesperado: {type(e).__name__}: {e}")
+    print(f"💾 Salvando progresso parcial: {len(processed)} posts processados...")
+    save_progress(processed, existing)
+    print(f"✅ Progresso salvo. Veja o erro acima e rode novamente para retomar.")
+    import sys
+    sys.exit(1)
 
 # ─── CALCULAR POSTS RELACIONADOS ─────────────────────────────
 print("\nCalculando posts relacionados...")
