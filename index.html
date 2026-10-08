@@ -1375,6 +1375,12 @@ function toggleBCCard(id){
   if(btn) btn.classList.toggle('open', !isOpen);
 }
 
+// Views que ganham hash próprio na URL (compartilháveis)
+const VIEW_HASH = {
+  bonus:   '#bonuschapters',
+  archive: '#archive',
+};
+
 function navTo(view){
   currentView = view;
   // hide all views
@@ -1409,6 +1415,13 @@ function navTo(view){
   if(footerHome) footerHome.classList.toggle('active', view==='home');
   // render dynamic content per view
   if(view === 'community') renderRankings();
+  // Atualiza a URL com hash quando a view tem link compartilhável
+  // (home e outras views limpam o hash)
+  if(VIEW_HASH[view]){
+    history.replaceState(null, '', VIEW_HASH[view]);
+  } else {
+    history.replaceState(null, '', window.location.pathname);
+  }
   // scroll to top
   window.scrollTo({top:0,behavior:'instant'});
 }
