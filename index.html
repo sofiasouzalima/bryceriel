@@ -2567,16 +2567,22 @@ const DEMO_POSTS=[
 /* ════════════════════════════════════════
    INIT
 ════════════════════════════════════════ */
+// Deep link hashes que pulam o level chooser
+var _deepLinkHashes = ['#bonuschapters','#bonus','#archive'];
+var _isDeepLink = _deepLinkHashes.indexOf(window.location.hash.toLowerCase()) !== -1;
+
 // Body starts with .welcome-locked class. Remove it only if user already has a level.
-if(!currentLevel){
+if(!currentLevel && !_isDeepLink){
   document.getElementById('levelChooser').classList.remove('hidden');
   document.body.classList.add('welcome-locked');
 } else {
+  if(!currentLevel) currentLevel = 'all'; // deep link sem level → usa 'all' sem salvar
   document.getElementById('levelChooser').classList.add('hidden');
   document.body.classList.remove('welcome-locked');
   updateLevelUI();
-  // helpful console hint for testing
-  console.log('%c👋 Already chose a level: ' + currentLevel + '\n• Click the level badge in the nav to change\n• Or visit ?reset to simulate first visit', 'color:#f0c84a;font-size:12px;line-height:1.6');
+  if(currentLevel !== 'all'){
+    console.log('%c👋 Already chose a level: ' + currentLevel + '\n• Click the level badge in the nav to change\n• Or visit ?reset to simulate first visit', 'color:#f0c84a;font-size:12px;line-height:1.6');
+  }
 }
 
 buildTlTabs();
@@ -2586,35 +2592,19 @@ renderGlossary();
 rotateQuotes();
 
 /* ── DEEP LINK via URL hash ── */
-(function(){
-  const HASH_MAP = {
+// O INIT já removeu welcome-locked se for deep link.
+// Aqui só precisamos navegar para a view certa.
+if(_isDeepLink){
+  var _HASH_VIEW = {
     '#bonuschapters': 'bonus',
     '#bonus':         'bonus',
     '#archive':       'archive',
   };
-  const hash = window.location.hash.toLowerCase();
-  const targetView = HASH_MAP[hash];
-  if(!targetView) return;
-  // Se primeira visita (sem level), usa 'all' só pra esta sessão
-  if(!currentLevel){
-    currentLevel = 'all';
-    try {
-      document.getElementById('levelChooser').classList.add('hidden');
-      document.body.classList.remove('welcome-locked');
-      updateLevelUI();
-    } catch(e){}
+  var _targetView = _HASH_VIEW[window.location.hash.toLowerCase()];
+  if(_targetView){
+    navTo(_targetView);
   }
-  // Navega sem deixar o navTo sobrescrever a URL com o hash novamente
-  // (já está no hash certo — só precisamos mostrar a view)
-  currentView = targetView;
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  const target = document.getElementById('view-' + targetView);
-  if(target) target.classList.add('active');
-  const footerHome = document.getElementById('view-footer-home');
-  if(footerHome) footerHome.classList.remove('active');
-  window.scrollTo({top:0, behavior:'instant'});
-  // URL já tem o hash correto — não mexe
-})();
+}
 
 // Helper to escape HTML chars safely
 function escapeHtml(text){
