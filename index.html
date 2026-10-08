@@ -2602,16 +2602,9 @@ if(_isDeepLink){
   };
   var _targetView = _HASH_VIEW[window.location.hash.toLowerCase()];
   if(_targetView){
-    // Usa DOMContentLoaded para garantir que o DOM inteiro (incluindo view-bonus
-    // que fica depois do </script>) já foi parseado antes de navegar
-    document.addEventListener('DOMContentLoaded', function(){
-      // Garante que welcome-locked não voltou
-      document.body.classList.remove('welcome-locked');
-      var lc = document.getElementById('levelChooser');
-      if(lc) lc.classList.add('hidden');
-      // Navega para a view
-      navTo(_targetView);
-    });
+    // view-bonus fica depois deste </script>, então o elemento não existe ainda.
+    // Guardamos o alvo numa variável global e um script no fim do body executa a navegação.
+    window._deepLinkTarget = _targetView;
   }
 }
 
@@ -5247,5 +5240,15 @@ loadPosts().then(()=>{
     </div>
   </div>
 </div>
+<script>
+/* ── DEEP LINK executor (roda depois de todo o HTML, incluindo view-bonus) ── */
+if(window._deepLinkTarget){
+  document.body.classList.remove('welcome-locked');
+  var _lc = document.getElementById('levelChooser');
+  if(_lc) _lc.classList.add('hidden');
+  navTo(window._deepLinkTarget);
+  delete window._deepLinkTarget;
+}
+</script>
 </body>
 </html>
