@@ -1388,7 +1388,16 @@ const VIEW_HASH = {
   archive: '#archive',
 };
 
+// Views que funcionam sem level (acessíveis via deep link)
+const VIEWS_NO_LEVEL_NEEDED = ['bonus','archive'];
+
 function navTo(view){
+  // Se veio por deep link (nolevel) e está tentando ir para uma view que precisa de level → pede para escolher
+  if(currentLevel === 'nolevel' && !VIEWS_NO_LEVEL_NEEDED.includes(view)){
+    currentLevel = null; // reseta para forçar o chooser
+    openLevelChooser();
+    return;
+  }
   currentView = view;
   // hide all views
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
