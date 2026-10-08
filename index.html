@@ -2585,13 +2585,7 @@ buildTheoryTabs();
 renderGlossary();
 rotateQuotes();
 
-/* ── DEEP LINK via URL hash ──
-   Supported hashes (case-insensitive):
-     #bonuschapters  → Bonus Chapters (pula level chooser)
-     #archive        → Archive (pula level chooser)
-   Se a pessoa não tiver escolhido level ainda,
-   o site usa 'all' silenciosamente para que o conteúdo apareça.
-────────────────────────────────────────── */
+/* ── DEEP LINK via URL hash ── */
 (function(){
   const HASH_MAP = {
     '#bonuschapters': 'bonus',
@@ -2600,19 +2594,26 @@ rotateQuotes();
   };
   const hash = window.location.hash.toLowerCase();
   const targetView = HASH_MAP[hash];
-  if(targetView){
-    // Garante level para o conteúdo aparecer
-    if(!currentLevel){
-      currentLevel = 'all';
-      // NÃO salva no localStorage — próxima visita sem hash ainda mostra level chooser
+  if(!targetView) return;
+  // Se primeira visita (sem level), usa 'all' só pra esta sessão
+  if(!currentLevel){
+    currentLevel = 'all';
+    try {
       document.getElementById('levelChooser').classList.add('hidden');
       document.body.classList.remove('welcome-locked');
       updateLevelUI();
-    }
-    navTo(targetView);
-    // Limpa o hash da URL sem recarregar (URL fica limpa mas a view está certa)
-    history.replaceState(null, '', window.location.pathname);
+    } catch(e){}
   }
+  // Navega sem deixar o navTo sobrescrever a URL com o hash novamente
+  // (já está no hash certo — só precisamos mostrar a view)
+  currentView = targetView;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const target = document.getElementById('view-' + targetView);
+  if(target) target.classList.add('active');
+  const footerHome = document.getElementById('view-footer-home');
+  if(footerHome) footerHome.classList.remove('active');
+  window.scrollTo({top:0, behavior:'instant'});
+  // URL já tem o hash correto — não mexe
 })();
 
 // Helper to escape HTML chars safely
