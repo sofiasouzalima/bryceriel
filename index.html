@@ -2572,6 +2572,36 @@ buildTheoryTabs();
 renderGlossary();
 rotateQuotes();
 
+/* ── DEEP LINK via URL hash ──
+   Supported hashes (case-insensitive):
+     #bonuschapters  → Bonus Chapters (pula level chooser)
+     #archive        → Archive (pula level chooser)
+   Se a pessoa não tiver escolhido level ainda,
+   o site usa 'all' silenciosamente para que o conteúdo apareça.
+────────────────────────────────────────── */
+(function(){
+  const HASH_MAP = {
+    '#bonuschapters': 'bonus',
+    '#bonus':         'bonus',
+    '#archive':       'archive',
+  };
+  const hash = window.location.hash.toLowerCase();
+  const targetView = HASH_MAP[hash];
+  if(targetView){
+    // Garante level para o conteúdo aparecer
+    if(!currentLevel){
+      currentLevel = 'all';
+      // NÃO salva no localStorage — próxima visita sem hash ainda mostra level chooser
+      document.getElementById('levelChooser').classList.add('hidden');
+      document.body.classList.remove('welcome-locked');
+      updateLevelUI();
+    }
+    navTo(targetView);
+    // Limpa o hash da URL sem recarregar (URL fica limpa mas a view está certa)
+    history.replaceState(null, '', window.location.pathname);
+  }
+})();
+
 // Helper to escape HTML chars safely
 function escapeHtml(text){
   if(text==null) return '';
